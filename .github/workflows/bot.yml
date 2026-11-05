@@ -1,0 +1,42 @@
+name: uchet-bot
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: uchet-bot
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: pip install --quiet httpx cryptography
+      - name: Run bot
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          STATE_KEY: ${{ secrets.STATE_KEY }}
+          TZ: Europe/Moscow
+          RUN_SECONDS: "780"
+        run: python bot.py
+      - name: Commit state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state.enc
+          if git diff --staged --quiet; then echo "no changes"; else
+            git commit -m "state $(date -u +%FT%TZ)"
+            git pull --rebase --autostash || true
+            git push
+          fi
